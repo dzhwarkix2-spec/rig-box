@@ -1,0 +1,162 @@
+(function(G){
+    function neutral(l){
+        var t=l.property("ADBE Transform Group");
+        t.property("ADBE Anchor Point").setValue([0,0]);t.property("ADBE Position").setValue([0,0]);
+        t.property("ADBE Scale").setValue([100,100]);t.property("ADBE Rotate Z").setValue(0);
+    }
+    function color(hex){return [parseInt(hex.substr(1,2),16)/255,parseInt(hex.substr(3,2),16)/255,parseInt(hex.substr(5,2),16)/255,1];}
+    function ensure(layer,name,type,value){
+        var fx=layer.property("ADBE Effect Parade"),i,p;
+        for(i=1;i<=fx.numProperties;i++){
+            p=fx.property(i);
+            if(p.name===name){
+                if(p.matchName!==type){throw new Error("The control '"+name+"' has the wrong type. Rename that effect and try again.");}
+                return;
+            }
+        }
+        G.effect(layer,name,type,value);
+    }
+    function controls(ctrl,target,o){
+        function slider(n,v){ensure(ctrl,n,"ADBE Slider Control",v);}
+        slider("Master Reveal",100);
+        slider("Stroke Width",o.stroke);
+        ensure(ctrl,"Stroke Color","ADBE Color Control",color(o.color));
+        slider("Guide Opacity",45);slider("Guide Offset",o.padding);
+        slider("Frame Width %",100);slider("Frame Height %",100);
+        slider("Horizontal Extension",o.horizontal);slider("Vertical Extension",o.vertical);
+        var sides=["Left","Right","Top","Bottom"],i;
+        for(i=0;i<sides.length;i++){slider("Guide "+sides[i]+" - Start",0);slider("Guide "+sides[i]+" - End",100);}
+        ensure(ctrl,"Boundary Color","ADBE Color Control",[1,1,1,1]);
+        slider("Boundary Width",2);slider("Boundary Opacity",100);
+        slider("Boundary - Start",0);slider("Boundary - End",100);
+        slider("Corner Size",6);slider("Corner Opacity",100);
+        ensure(ctrl,"Live Bounds","ADBE Checkbox Control",o.live?1:0);
+        ensure(ctrl,"GR Target","ADBE Layer Control",target.index);
+    }
+    function controller(c,target,id,o,b){
+        var ctrl=c.layers.addNull(c.duration);
+        try{
+            ctrl.name="GridRig CTRL — "+target.name;ctrl.label=9;
+            ctrl.comment=G.prefix+id+"|CTRL|"+G.encodeConfig(o,b);
+            ctrl.parent=target;neutral(ctrl);ctrl.guideLayer=true;
+            ctrl.inPoint=target.inPoint;ctrl.outPoint=target.outPoint;
+            controls(ctrl,target,o);ctrl.moveBefore(target);
+            return ctrl;
+        }catch(e){try{ctrl.remove();}catch(ignore){}throw e;}
+    }
+    function line(root,side){
+        var name="Guide "+side;
+        var group=root.addProperty("ADBE Vector Group");group.name=name;
+        var contents=group.property("ADBE Vectors Group");
+        var path=contents.addProperty("ADBE Vector Shape - Group");path.name="Line";
+        var shape=new Shape();shape.vertices=[[0,0],[1,1]];shape.inTangents=[[0,0],[0,0]];shape.outTangents=[[0,0],[0,0]];shape.closed=false;
+        path.property("ADBE Vector Shape").setValue(shape);
+        path.property("ADBE Vector Shape").expression=G.pathExpression(side);
+        var stroke=contents.addProperty("ADBE Vector Graphic - Stroke");stroke.name="Stroke";
+        stroke.property("ADBE Vector Stroke Color").expression=G.controlPrefix+'c.effect("Stroke Color")(1);';
+        stroke.property("ADBE Vector Stroke Width").expression=G.controlPrefix+'Math.max(0,c.effect("Stroke Width")(1));';
+        stroke.property("ADBE Vector Stroke Line Cap").setValue(1);
+        var trim=contents.addProperty("ADBE Vector Filter - Trim");trim.name="Reveal";
+        trim.property("ADBE Vector Trim Start").expression=G.trimExpression(name,false);
+        trim.property("ADBE Vector Trim End").expression=G.trimExpression(name,true);
+        group.property("ADBE Vector Transform Group").property("ADBE Vector Group Opacity").expression=G.opacityExpression();
+    }
+    function boundary(root){
+        var group=root.addProperty("ADBE Vector Group");group.name="Bounding Box";
+        var contents=group.property("ADBE Vectors Group");
+        var path=contents.addProperty("ADBE Vector Shape - Group");path.name="Boundary Path";
+        var shape=new Shape();shape.vertices=[[0,0],[1,0],[1,1],[0,1]];shape.inTangents=[[0,0],[0,0],[0,0],[0,0]];shape.outTangents=[[0,0],[0,0],[0,0],[0,0]];shape.closed=true;
+        path.property("ADBE Vector Shape").setValue(shape);
+        path.property("ADBE Vector Shape").expression=G.boxPathExpression();
+        var stroke=contents.addProperty("ADBE Vector Graphic - Stroke");stroke.name="Boundary Stroke";
+        stroke.property("ADBE Vector Stroke Color").expression=G.controlPrefix+'c.effect("Boundary Color")(1);';
+        stroke.property("ADBE Vector Stroke Width").expression=G.controlPrefix+'Math.max(0,c.effect("Boundary Width")(1));';
+        stroke.property("ADBE Vector Stroke Line Join").setValue(1);
+        var trim=contents.addProperty("ADBE Vector Filter - Trim");trim.name="Boundary Reveal";
+        trim.property("ADBE Vector Trim Start").expression=G.trimExpression("Boundary",false);
+        trim.property("ADBE Vector Trim End").expression=G.trimExpression("Boundary",true);
+        group.property("ADBE Vector Transform Group").property("ADBE Vector Group Opacity").expression=G.controlPrefix+'Math.max(0,Math.min(100,c.effect("Boundary Opacity")(1)));';
+    }
+    function corner(root,index){
+        var names=["Top Left","Top Right","Bottom Right","Bottom Left"];
+        var group=root.addProperty("ADBE Vector Group");group.name="Corner "+names[index];
+        var contents=group.property("ADBE Vectors Group");
+        var path=contents.addProperty("ADBE Vector Shape - Group");path.name="Corner Marker";
+        var shape=new Shape();shape.vertices=[[0,0],[1,0],[1,1],[0,1]];shape.inTangents=[[0,0],[0,0],[0,0],[0,0]];shape.outTangents=[[0,0],[0,0],[0,0],[0,0]];shape.closed=true;
+        path.property("ADBE Vector Shape").setValue(shape);
+        path.property("ADBE Vector Shape").expression=G.cornerPathExpression(index);
+        var fill=contents.addProperty("ADBE Vector Graphic - Fill");fill.name="Corner Fill";
+        fill.property("ADBE Vector Fill Color").expression=G.controlPrefix+'c.effect("Boundary Color")(1);';
+        group.property("ADBE Vector Transform Group").property("ADBE Vector Group Opacity").expression=G.cornerOpacityExpression();
+    }
+    G.graphics=function(c,ctrl,id,o,b){
+        var gfx=c.layers.addShape();
+        try{
+            gfx.name="GridRig GFX — "+(G.targetOf(ctrl)?G.targetOf(ctrl).name:"Rig");gfx.label=9;
+            gfx.comment=G.prefix+id+"|GFX|";gfx.parent=ctrl;neutral(gfx);
+            gfx.inPoint=ctrl.inPoint;gfx.outPoint=ctrl.outPoint;
+            G.effect(gfx,"GR Controller","ADBE Layer Control",ctrl.index);
+            G.slider(gfx,"GR Bounds Left",b.left);G.slider(gfx,"GR Bounds Top",b.top);
+            G.slider(gfx,"GR Bounds Width",b.width);G.slider(gfx,"GR Bounds Height",b.height);
+            var root=gfx.property("ADBE Root Vectors Group"),sides=["Left","Right","Top","Bottom"],i;
+            // Four finite guide lines extend past the separately controllable box.
+            for(i=0;i<sides.length;i++){line(root,sides[i]);}
+            boundary(root);
+            for(i=0;i<4;i++){corner(root,i);}
+            gfx.moveBefore(ctrl);return gfx;
+        }catch(e){try{gfx.remove();}catch(ignore){}throw e;}
+    };
+    G.create=function(options){
+        var c=G.comp(),selected=G.one(c),existing=G.find(c,selected),ctrl=null,gfx=null,created=false;
+        var o=G.options(options),b,id,target,legacy=false,oldComment="",oldCount=0,oldLocked=false;
+        if(existing && !existing.ctrl){throw new Error("The controller is missing. Remove this orphaned rig, select the original layer and create again.");}
+        if(existing){legacy=G.tag(existing.ctrl).version<4;}
+        if(existing && existing.gfx && !legacy){
+            if(!G.targetOf(existing.ctrl)){throw new Error("The original target is missing. Remove this rig and create one for another layer.");}
+            G.select(c,existing.ctrl);return {ok:true,message:"Rig selected. Boundary controls are in Effect Controls."};
+        }
+        target=existing?G.targetOf(existing.ctrl):selected;
+        if(!target){throw new Error("The original target layer is missing.");}G.validateTarget(target);
+        if(existing){
+            b=G.decodeConfig(existing.ctrl).bounds;id=existing.id;ctrl=existing.ctrl;
+            oldComment=ctrl.comment;oldCount=ctrl.property("ADBE Effect Parade").numProperties;oldLocked=ctrl.locked;
+        }else{b=G.snapshot(target,c.time);id=(new Date().getTime()).toString(36)+Math.floor(Math.random()*1679616).toString(36);}
+        app.beginUndoGroup(legacy?"Use Short GridRig Extensions":existing?"Repair GridRig Graphics":"Create Guides and Bounding Box");
+        try{
+            if(!existing){ctrl=controller(c,target,id,o,b);created=true;}
+            else{ctrl.locked=false;controls(ctrl,target,o);}
+            gfx=G.graphics(c,ctrl,id,o,b);
+            if(existing && existing.gfx){gfx.enabled=existing.gfx.enabled;gfx.guideLayer=existing.gfx.guideLayer;}
+            ctrl.comment=G.prefix+id+"|CTRL|"+G.encodeConfig(o,b);
+            G.select(c,ctrl);
+            if(existing && existing.gfx){existing.gfx.locked=false;existing.gfx.remove();}
+            return {ok:true,message:legacy?"Short line extensions applied. Box and controller keyframes kept.":existing?"Guides and bounding box restored. Controller keyframes kept.":"Created: compact guide lines + bounding box. Adjust Extension sliders for line length."};
+        }catch(e){
+            if(gfx){try{gfx.remove();}catch(ignore1){}}
+            if(created&&ctrl){try{ctrl.remove();}catch(ignore2){}}
+            else if(ctrl){
+                ctrl.comment=oldComment;
+                var fx=ctrl.property("ADBE Effect Parade");
+                while(fx.numProperties>oldCount){fx.property(fx.numProperties).remove();}
+            }
+            try{G.select(c,selected);}catch(ignore3){}throw e;
+        }finally{if(existing&&ctrl){ctrl.locked=oldLocked;}app.endUndoGroup();}
+    };
+    G.controls=function(){
+        var c=G.comp(),r=G.find(c,G.one(c));
+        if(!r||!r.ctrl){throw new Error("Select a rig layer or its original layer first.");}
+        G.select(c,r.ctrl);return {ok:true,message:"Controller selected. Use the AE stopwatches to animate."};
+    };
+    G.remove=function(){
+        var c=G.comp(),r=G.find(c,G.one(c));
+        if(!r){throw new Error("No GridRig belongs to this selection.");}
+        var target=r.ctrl?G.targetOf(r.ctrl):null;
+        app.beginUndoGroup("Remove GridRig");
+        try{
+            if(r.gfx){r.gfx.locked=false;r.gfx.remove();}
+            if(r.ctrl){r.ctrl.locked=false;r.ctrl.remove();}
+            if(target){target.selected=true;}
+            return {ok:true,message:"Rig removed. Original layer kept. Ctrl/Cmd+Z restores it."};
+        }finally{app.endUndoGroup();}
+    };
+}(GridRig));

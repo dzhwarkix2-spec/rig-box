@@ -1,0 +1,120 @@
+(function (G) {
+    G.prefix = "GRIDRIG_AE|4|";
+    G.json = function (value) {
+        function quote(s) {
+            return '"' + String(s).replace(/[\\"\u0000-\u001f\u2028\u2029]/g, function(c) {
+                var n=c.charCodeAt(0).toString(16);
+                return "\\u" + ("0000" + n).slice(-4);
+            }) + '"';
+        }
+        if (value === null || typeof value === "undefined") { return "null"; }
+        if (typeof value === "string") { return quote(value); }
+        if (typeof value === "number") { return isFinite(value) ? String(value) : "null"; }
+        if (typeof value === "boolean") { return value ? "true" : "false"; }
+        var a=[], i;
+        if (value instanceof Array) {
+            for(i=0;i<value.length;i++){a.push(G.json(value[i]));}
+            return "["+a.join(",")+"]";
+        }
+        for(i in value){if(value.hasOwnProperty(i)){a.push(quote(i)+":"+G.json(value[i]));}}
+        return "{"+a.join(",")+"}";
+    };
+    G.tag = function(layer) {
+        var s=String(layer.comment || "");
+        if(!/^GRIDRIG_AE\|[1234]\|/.test(s)){return null;}
+        var a=s.split("|");
+        if(a.length!==5 || !/^[a-z0-9]+$/.test(a[2]) || (a[3]!=="CTRL" && a[3]!=="GFX")){return null;}
+        return {id:a[2],role:a[3],payload:a[4],version:Number(a[1])};
+    };
+    G.comp = function() {
+        var c=app.project && app.project.activeItem;
+        if(!(c instanceof CompItem)){throw new Error("Open a composition, then select one layer.");}
+        return c;
+    };
+    G.one = function(c) {
+        if(c.selectedLayers.length!==1){throw new Error("Select exactly one original layer, rig controller or rig graphics layer.");}
+        return c.selectedLayers[0];
+    };
+    G.targetOf = function(ctrl) {
+        try {
+            var n=ctrl.property("ADBE Effect Parade").property("GR Target").property(1).value;
+            return n>0 ? ctrl.containingComp.layer(n) : null;
+        } catch(e){return null;}
+    };
+    G.find = function(c,selected) {
+        var selectedTag=G.tag(selected), id=selectedTag ? selectedTag.id : null, ctrl=null, gfx=null, i,t,l;
+        if(!id){
+            for(i=1;i<=c.numLayers;i++){
+                l=c.layer(i);t=G.tag(l);
+                if(t && t.role==="CTRL" && G.targetOf(l)===selected){
+                    if(id){throw new Error("Multiple rigs target this layer. Select the specific rig controller.");}
+                    id=t.id;
+                }
+            }
+        }
+        if(!id){return null;}
+        for(i=1;i<=c.numLayers;i++){
+            l=c.layer(i);t=G.tag(l);
+            if(t && t.id===id){
+                if(t.role==="CTRL") {if(ctrl){throw new Error("Duplicated rig tags found. Undo the layer duplication before managing this rig.");}ctrl=l;}
+                else {if(gfx){throw new Error("Duplicated graphics tags found. Undo the layer duplication before managing this rig.");}gfx=l;}
+            }
+        }
+        return {id:id,ctrl:ctrl,gfx:gfx};
+    };
+    G.validateTarget = function(t) {
+        if(!(t instanceof AVLayer) || t.nullLayer || !t.hasVideo || t.adjustmentLayer){throw new Error("Choose a 2D text, shape, image, solid or precomp layer.");}
+        var p=t;
+        while(p){if(p.threeDLayer){throw new Error("This rig supports 2D layers and 2D parents. Precompose the 3D result first.");}p=p.parent;}
+    };
+    G.num = function(v,fallback,min,max,integer) {
+        var n=Number(v);if(typeof v==="undefined" || !isFinite(n)){n=fallback;}
+        n=Math.max(min,Math.min(max,n));return integer?Math.round(n):n;
+    };
+    G.options = function(o) {
+        o=o||{};var c={};
+        c.padding=G.num(o.padding,16,0,2000,false);c.stroke=G.num(o.stroke,1,0.1,100,false);
+        c.live=o.live!==false;
+        c.horizontal=G.num(o.horizontal,40,0,10000,false);c.vertical=G.num(o.vertical,40,0,10000,false);
+        c.color=/^#[0-9a-fA-F]{6}$/.test(o.color||"")?o.color:"#c4c4c4";
+        return c;
+    };
+    G.snapshot = function(t,time) {
+        var r;
+        if(t instanceof TextLayer || t instanceof ShapeLayer){r=t.sourceRectAtTime(time,false);}
+        else{r={left:0,top:0,width:t.width,height:t.height};}
+        if(!isFinite(r.width)||!isFinite(r.height)||r.width<=0||r.height<=0){throw new Error("The selected layer has empty bounds at this time. Move to a visible frame.");}
+        return {left:r.left,top:r.top,width:r.width,height:r.height};
+    };
+    G.effect = function(layer,name,type,value) {
+        var fx=layer.property("ADBE Effect Parade");
+        var p=fx.addProperty(type);p.name=name;p.property(1).setValue(value);
+        // Never retain an indexed Property reference across addProperty calls.
+    };
+    G.slider=function(l,n,v){G.effect(l,n,"ADBE Slider Control",v);};
+    G.expr=function(l,n){return l.property("ADBE Effect Parade").property(n).property(1);};
+    G.select = function(c,l) {
+        var a=c.selectedLayers,i;for(i=0;i<a.length;i++){a[i].selected=false;}
+        l.selected=true;
+        // Command ID 2163 is AE's Effect Controls panel. Failure does not invalidate a rig.
+        try{app.executeCommand(2163);}catch(e){}
+    };
+    G.inspect = function() {
+        var c=G.comp();
+        if(c.selectedLayers.length!==1){return {ok:true,selected:false,label:"Select one layer in the timeline"};}
+        var s=c.selectedLayers[0], r=G.find(c,s);
+        return {ok:true,selected:true,label:r?"Rig · "+(r.ctrl?r.ctrl.name:s.name):s.name};
+    };
+    // Small numeric configuration, not executable JSON; safely stored in the controller comment.
+    G.encodeConfig = function(o,b) {
+        return [b.left,b.top,b.width,b.height].join(",");
+    };
+    G.decodeConfig = function(ctrl) {
+        var t=G.tag(ctrl),a=t?t.payload.split(","):[],i;
+        if(!t || (t.version===1 ? a.length!==8 : a.length!==4)){throw new Error("This rig's metadata is incomplete. Undo the last change or recreate it.");}
+        for(i=0;i<a.length;i++){if(a[i]==="" || !isFinite(Number(a[i]))){throw new Error("Invalid rig metadata.");}a[i]=Number(a[i]);}
+        var k=t.version===1?4:0;
+        if(a[k+2]<=0||a[k+3]<=0){throw new Error("Invalid stored bounds.");}
+        return {options:{},bounds:{left:a[k],top:a[k+1],width:a[k+2],height:a[k+3]}};
+    };
+}(GridRig));

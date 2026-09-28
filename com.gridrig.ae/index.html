@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'">
+<title>GridRig AE</title><link rel="stylesheet" href="css/panel.css"></head>
+<body>
+<main>
+  <header><div class="brand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2v20M17 2v20M2 7h20M2 17h20"/><rect x="7" y="7" width="10" height="10"/></svg><h1>GridRig <span>AE</span></h1></div><button id="help-toggle" class="icon" aria-label="Show help" aria-expanded="false" title="Quick help">?</button></header>
+  <p class="intro">Select a layer. Create. Animate in AE.</p>
+  <div class="target"><span class="dot" id="dot"></span><span id="target">Connecting to After Effects…</span><button id="refresh" class="icon" aria-label="Refresh selection" title="Refresh selection">↻</button></div>
+  <form id="rig-form">
+    <div class="frame-preview" aria-label="Two horizontal and two vertical guide lines around a layer">
+      <svg viewBox="0 0 264 100" role="img"><title>Four guide lines and a separate bounding box</title><path d="M74 12V88M190 12V88M48 28H216M48 72H216"/><rect class="boundary" x="74" y="28" width="116" height="44"/><path class="corners" d="M71 25h6v6h-6zM187 25h6v6h-6zM187 69h6v6h-6zM71 69h6v6h-6z"/><text x="132" y="55" text-anchor="middle">YOUR LAYER</text></svg>
+      <p>Short guides + bounding box</p>
+    </div>
+    <button type="submit" id="create" class="primary" disabled>Create Rig</button>
+    <details id="settings"><summary>Appearance <span>optional</span></summary><div class="settings-body">
+      <p class="muted">For new rigs. Edit existing rigs in Effect Controls.</p>
+      <div class="two-fields"><label>Guide offset <span class="unit">px</span><input id="padding" type="number" min="0" max="2000" step="1" value="16"></label><label>Stroke <span class="unit">px</span><input id="stroke" type="number" min="0.1" max="100" step="0.1" value="1"></label></div>
+      <div class="two-fields"><label>Horizontal extension<input id="horizontal" type="number" min="0" max="10000" step="1" value="40"></label><label>Vertical extension<input id="vertical" type="number" min="0" max="10000" step="1" value="40"></label></div>
+      <div class="color-row"><label for="color">Stroke color</label><input id="color" type="color" value="#c4c4c4" aria-label="Stroke color"></div>
+      <label class="check-row"><input id="live" type="checkbox" checked>Follow changing text / shape bounds</label>
+      <button id="defaults" class="text-button" type="button">Reset setup</button>
+    </div></details>
+  </form>
+  <div class="management"><button id="controls" disabled title="Select the rig controller and open Effect Controls">Select Controls</button><button id="remove" disabled title="Remove only the selected rig. Undo with Ctrl/Cmd+Z.">Remove Rig</button></div>
+  <p id="status" class="status" role="status" aria-live="polite">One controller. Normal AE keyframes.</p>
+  <section id="help" hidden><h2>Guides + bounding box. One click.</h2><ol><li>Select the text or artwork layer you want to frame.</li><li>Click <strong>Create Rig</strong>.</li><li>Animate <strong>Master Reveal</strong>, each line’s <strong>Start / End</strong>, or <strong>Boundary - End</strong> in AE.</li></ol><p>Two vertical and two horizontal lines extend a short distance past the box. Use <strong>Horizontal Extension</strong> and <strong>Vertical Extension</strong> to change their length in pixels. A separate closed rectangle and four corner markers frame your artwork. Set Guide Opacity to 0 to see the box on its own.</p><p>Change <strong>Frame Width %</strong>, <strong>Frame Height %</strong> or <strong>Guide Offset</strong> in Effect Controls to resize the frame. Animate the controller’s Position to move it.</p><p>Select a rig from an earlier bundle and click <strong>Create Rig</strong> to apply short line extensions while preserving its box and controller keyframes. Existing guide keyframes are kept.</p><p>Use a tightly cropped precomp to frame several elements together. 2D layers only. Generated lines render in exports.</p><p class="muted">GridRig AE 1.3 · Short guides + bounding box</p></section>
+</main>
+<script src="js/bridge.js"></script><script src="js/app.js"></script>
+</body></html>

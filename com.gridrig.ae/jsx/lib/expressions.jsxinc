@@ -1,0 +1,41 @@
+(function(G){
+    G.controlPrefix='var c=effect("GR Controller")(1);\n';
+    G.boundsPrefix=G.controlPrefix+
+        'var t=c.effect("GR Target")(1);\n'+
+        'var b={left:effect("GR Bounds Left")(1),top:effect("GR Bounds Top")(1),width:effect("GR Bounds Width")(1),height:effect("GR Bounds Height")(1)};\n'+
+        'if(c.effect("Live Bounds")(1)>0){try{b=t.sourceRectAtTime(time,false);}catch(e){}}\n'+
+        'var p=Math.max(0,c.effect("Guide Offset")(1));\n'+
+        'var w=Math.max(0.01,(b.width+2*p)*Math.max(0.01,c.effect("Frame Width %")(1))/100);\n'+
+        'var h=Math.max(0.01,(b.height+2*p)*Math.max(0.01,c.effect("Frame Height %")(1))/100);\n'+
+        'var x=b.left+b.width/2-w/2,y=b.top+b.height/2-h/2;\n';
+    G.pathExpression = function(side) {
+        var points;
+        if(side==="Left"){points='[[x,y-v],[x,y+h+v]]';}
+        else if(side==="Right"){points='[[x+w,y-v],[x+w,y+h+v]]';}
+        else if(side==="Top"){points='[[x-u,y],[x+w+u,y]]';}
+        else if(side==="Bottom"){points='[[x-u,y+h],[x+w+u,y+h]]';}
+        else{throw new Error("Unknown guide side.");}
+        return G.boundsPrefix+
+            'var u=Math.max(0,c.effect("Horizontal Extension")(1));\n'+
+            'var v=Math.max(0,c.effect("Vertical Extension")(1));\n'+
+            'createPath('+points+',[],[],false);';
+    };
+    G.boxPathExpression=function(){
+        return G.boundsPrefix+'createPath([[x,y],[x+w,y],[x+w,y+h],[x,y+h]],[],[],true);';
+    };
+    G.cornerPathExpression=function(index){
+        var positions=['[x,y]','[x+w,y]','[x+w,y+h]','[x,y+h]'];
+        return G.boundsPrefix+'var q='+positions[index]+';var s=Math.max(0,c.effect("Corner Size")(1))/2;\n'+
+            'createPath([[q[0]-s,q[1]-s],[q[0]+s,q[1]-s],[q[0]+s,q[1]+s],[q[0]-s,q[1]+s]],[],[],true);';
+    };
+    G.cornerOpacityExpression=function(){
+        return G.controlPrefix+'Math.max(0,Math.min(100,c.effect("Corner Opacity")(1)))*Math.max(0,Math.min(100,c.effect("Master Reveal")(1)))/100;';
+    };
+    G.trimExpression=function(label,end){
+        return G.controlPrefix+
+            'var start=Math.max(0,Math.min(100,c.effect("'+label+' - Start")(1)));\n'+
+            'var finish=Math.max(0,Math.min(100,c.effect("'+label+' - End")(1)));\n'+
+            (end?'start+(finish-start)*Math.max(0,Math.min(100,c.effect("Master Reveal")(1)))/100;':'start;');
+    };
+    G.opacityExpression=function(){return G.controlPrefix+'Math.max(0,Math.min(100,c.effect("Guide Opacity")(1)));';};
+}(GridRig));
